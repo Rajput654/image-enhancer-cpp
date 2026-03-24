@@ -1,0 +1,22 @@
+# Stage 1: Build C++
+FROM ubuntu:22.04 AS builder
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y build-essential cmake libopencv-dev
+WORKDIR /build
+COPY core/CMakeLists.txt core/main.cpp ./
+RUN mkdir build && cd build && cmake .. && make -j$(nproc)
+
+# Stage 2: Runtime
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip \
+    libopencv-core4.5d libopencv-imgproc4.5d \
+    libopencv-imgcodecs4.5d libopencv-objdetect4.5d \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir redis
+WORKDIR /app
+COPY --from=builder /build/build/enhance_app .
+COPY face_detection_yunet_2023mar.onnx .
+COPY backend/worker.py .
+CMD ["python3", "worker.py"]

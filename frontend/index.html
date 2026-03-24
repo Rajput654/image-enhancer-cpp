@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Enhancer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center py-12 px-4">
+
+    <div class="max-w-3xl w-full text-center space-y-8">
+        <h1 class="text-4xl font-extrabold tracking-tight">Pro-Grade <span class="text-blue-500">Image Enhancement</span></h1>
+        <p class="text-gray-400">Upload a portrait to instantly enhance details, correct noise, and protect facial features using our C++ engine.</p>
+
+        <div id="upload-box" class="border-2 border-dashed border-gray-600 rounded-xl p-12 hover:border-blue-500 transition cursor-pointer bg-gray-800">
+            <input type="file" id="fileInput" class="hidden" accept="image/jpeg, image/png">
+            <div class="space-y-4">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <p class="text-lg">Click to upload or drag and drop</p>
+                <p class="text-sm text-gray-500">JPEG or PNG up to 10MB</p>
+            </div>
+        </div>
+
+        <div id="loading" class="hidden space-y-4">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+            <p id="status-text" class="text-blue-400 animate-pulse">Uploading to server...</p>
+        </div>
+
+        <div id="result" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="mb-2 text-sm text-gray-400">Original</p>
+                    <img id="orig-img" class="rounded-lg shadow-lg w-full object-cover">
+                </div>
+                <div>
+                    <p class="mb-2 text-sm text-blue-400 font-semibold">Enhanced</p>
+                    <img id="enhanced-img" class="rounded-lg shadow-lg border-2 border-blue-500 w-full object-cover">
+                </div>
+            </div>
+            <a id="download-btn" href="#" download="enhanced_image.jpg" class="inline-block bg-blue-600 hover:bg-blue-700 px-8 py-3 rounded-lg font-semibold transition shadow-lg">
+                Download High-Res
+            </a>
+            <button onclick="location.reload()" class="ml-4 text-gray-400 hover:text-white transition">Enhance Another</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadBox = document.getElementById('upload-box');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+        const statusText = document.getElementById('status-text');
+        const result = document.getElementById('result');
+
+        // Handle Click Upload
+        uploadBox.addEventListener('click', () => fileInput.click());
+
+        // Handle File Selection
+        fileInput.addEventListener('change', async (e) => {
+            if (e.target.files.length > 0) processImage(e.target.files[0]);
+        });
+
+        async function processImage(file) {
+            // UI Updates
+            uploadBox.classList.add('hidden');
+            loading.classList.remove('hidden');
+            document.getElementById('orig-img').src = URL.createObjectURL(file);
+
+            // 1. Upload the file
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const uploadRes = await fetch('/api/enhance/', { method: 'POST', body: formData });
+                const uploadData = await uploadRes.json();
+                
+                if (uploadData.task_id) {
+                    statusText.innerText = "In queue, processing engine started...";
+                    pollStatus(uploadData.task_id);
+                }
+            } catch (err) {
+                alert("Upload failed. Is the server running?");
+                location.reload();
+            }
+        }
+
+        async function pollStatus(taskId) {
+            // 2. Poll the server every 2 seconds to check if C++ is done
+            const interval = setInterval(async () => {
+                const res = await fetch(`/api/status/${taskId}`);
+                const data = await res.json();
+
+                if (data.status === 'completed') {
+                    clearInterval(interval);
+                    loading.classList.add('hidden');
+                    result.classList.remove('hidden');
+                    
+                    // Show final image and setup download
+                    const imageUrl = `/api/result/${taskId}`;
+                    document.getElementById('enhanced-img').src = imageUrl;
+                    document.getElementById('download-btn').href = imageUrl;
+                } else if (data.status === 'failed') {
+                    clearInterval(interval);
+                    alert("Processing failed on the server.");
+                    location.reload();
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
